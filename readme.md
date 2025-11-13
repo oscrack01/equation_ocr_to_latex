@@ -26,9 +26,10 @@ Follow these steps to build and run the entire pipeline on your local machine.
 Clone the project to your local machine:
 
 ```bash
-git clone [https://github.com/oscrack01/equation_ocr_to_latex.git](https://github.com/oscrack01/equation_ocr_to_latex.git)
+git clone https://github.com/oscrack01/equation_ocr_to_latex.git
 cd equation_ocr_to_latex
 ```
+--- 
 
 ### 2. Manual Setup: Download Models
 This repository does not include the ML model files (they are too large for GitHub). You must download them manually.
@@ -57,17 +58,22 @@ mkdir -p src/equation_ocr/models
 
     - Save As: keys.json (Note: Do not compress this file)
 
-3. **Prepare Input/Output Folders**
+**Note**: The files must be named model.onnx and keys.json exactly, otherwise the pipeline will not be able to find them.
+
+---
+
+### 3. **Prepare Input/Output Folders**
 Create the local folders that Airflow will use to read your images and write the results.
 
 ```bash
-
 mkdir my-inputs
 mkdir outputs
 ```
 Now, place any equation image (e.g., test_equation.jpg) inside the ./my-inputs folder.
 
-4. **Build and Launch Airflow**
+---
+
+### 4. **Build and Launch Airflow**
 This single command builds your custom Docker image, downloads Postgres and Redis, and launches the entire Airflow suite.
 
     Note: The first build will take several minutes (10-20 min) as it downloads and installs the LaTeX system.
@@ -76,7 +82,9 @@ This single command builds your custom Docker image, downloads Postgres and Redi
 docker-compose up -d --build
 ```
 
-5. **Run Your Pipeline!**
+---
+
+### 5. **Run Your Pipeline!**
 Wait about 60 seconds for all services to start.
 
 Open your web browser and go to: http://localhost:8080
@@ -93,7 +101,9 @@ Click the toggle switch on the left to turn it On.
 
 Click the Play button (▶️) on the right and select "Trigger DAG".
 
-6. **Check Your Results**
+---
+
+### 6. **Check Your Results**
 After a few moments, the pipeline will finish (the task squares will turn green).
 
 Go to the ./outputs folder in your project. You will find your rendered image (e.g., rendered_dag.png) inside!
