@@ -1,5 +1,4 @@
 import os
-import gzip
 import json
 import numpy as np
 import cv2
@@ -11,7 +10,7 @@ _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Sube un nivel (a src/equation_ocr) y luego entra a 'models'
 _MODEL_DIR = os.path.join(_CURRENT_DIR, "..", "models")
 MODEL_PATH = os.path.join(_MODEL_DIR, "model.onnx")
-VOCAB_PATH = os.path.join(_MODEL_DIR, "vocab.json.gz")
+VOCAB_PATH = os.path.join(_MODEL_DIR, "keys.json")
 
 
 class LatexOCR:
@@ -32,7 +31,7 @@ class LatexOCR:
         self.session = ort.InferenceSession(model_path, providers=['CPUExecutionProvider'])
         
         # Carga el vocabulario
-        with gzip.open(vocab_path, "rt", encoding="utf-8") as f:
+        with open(vocab_path, "r", encoding="utf-8") as f:
             self.vocab_data = json.load(f)
         
         # ¡CORRECCIÓN! El vocabulario es un 'dict', no una 'list'.
