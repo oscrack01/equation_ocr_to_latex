@@ -1,0 +1,6 @@
+apache-airflow
+opencv-python-headless
+numpy
+onnxruntime
+matplotlib
+python-dotenv

@@ -1,0 +1,4 @@
+# Incluye recursivamente cualquier archivo .onnx o .json.gz
+# que se encuentre dentro del directorio 'src/equation_ocr'
+recursive-include src/equation_ocr *.onnx
+recursive-include src/equation_ocr *.json.gz

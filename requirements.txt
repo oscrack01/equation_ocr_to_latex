@@ -1,0 +1,27 @@
+# ---------
+# Core
+# ---------
+apache-airflow
+
+# ---------
+# Procesamiento de Imágenes y Datos
+# ---------
+# Para cargar (cv2) y manejar (numpy) imágenes
+opencv-python-headless
+numpy
+
+# ---------
+# Lógica de OCR
+# ---------
+# Para correr el modelo .onnx
+onnxruntime
+
+# ---------
+# Renderizado de LaTeX
+# ---------
+matplotlib
+
+# ---------
+# Utilidades
+# ---------
+python-dotenv

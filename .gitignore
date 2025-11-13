@@ -1,2 +1,38 @@
-# Ignorar la carpeta del entorno virtual
-venv/
+# Entorno virtual de Python
+/venv/
+.venv/
+
+# Caches de Python
+__pycache__/
+*.pyc
+
+# Archivos de build de Setuptools
+build/
+dist/
+*.egg-info/
+/src/*.egg-info/
+
+# Archivos del sistema
+.DS_Store
+
+# Salidas de Airflow/Docker
+/logs/
+/outputs/
+
+# Entradas de usuario
+/my-inputs/
+
+# Modelos de ML (¡No subir archivos binarios grandes a Git!)
+/src/equation_ocr/models/*.onnx
+/src/equation_ocr/models/*.gz
+/src/equation_ocr/models/*.json
+
+# Archivos de configuración de IDE
+.vscode/
+
+# Archivos de entorno (si los usas)
+.env
+
+# Archivos de prueba local
+/test_equation.jpg
+/test_fourier.png

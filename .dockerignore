@@ -1,0 +1,13 @@
+# Ignorar el entorno virtual
+venv/
+/venv/
+
+# Ignorar caches de Python
+__pycache__/
+*.pyc
+
+# Ignorar archivos de build de setuptools (¡Esta es la clave!)
+build/
+dist/
+*.egg-info/
+/src/*.egg-info/

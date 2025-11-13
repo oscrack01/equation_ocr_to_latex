@@ -1,0 +1,9 @@
+MANIFEST.in
+setup.py
+src/equation_ocr.egg-info/PKG-INFO
+src/equation_ocr.egg-info/SOURCES.txt
+src/equation_ocr.egg-info/dependency_links.txt
+src/equation_ocr.egg-info/requires.txt
+src/equation_ocr.egg-info/top_level.txt
+src/equation_ocr/models/model.onnx
+src/equation_ocr/models/vocab.json.gz

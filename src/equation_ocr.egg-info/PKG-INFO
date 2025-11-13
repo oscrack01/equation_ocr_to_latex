@@ -1,0 +1,13 @@
+Metadata-Version: 2.1
+Name: equation-ocr
+Version: 0.1.0
+Summary: Pipeline para convertir imágenes de ecuaciones a LaTeX renderizado.
+Home-page: https_://github.com/oscrack01/equation_ocr_to_latex
+Author: Tu Nombre
+Author-email: tu_email@ejemplo.com
+Classifier: Programming Language :: Python :: 3
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Operating System :: OS Independent
+Classifier: Topic :: Scientific/Engineering :: Image Recognition
+Requires-Python: >=3.8
