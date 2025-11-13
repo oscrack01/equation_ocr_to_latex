@@ -1,122 +1,99 @@
-# 💡 Project: Equation OCR Pipeline (Airflow)
+# Equation OCR to LaTeX Pipeline
 
-This project implements a data pipeline to convert images of mathematical equations into renderable LaTeX text.
+This project implements a full MLOps pipeline using Docker and Apache Airflow to convert images of mathematical equations into rendered LaTeX images.
 
-The flow includes image pre-processing, an OCR model (based on ONNX), LaTeX rendering, and a key **Human-in-the-Loop** validation step to collect feedback on the model's accuracy.
+The pipeline performs the following steps:
+1.  **Extract:** Loads an input image (JPG, PNG) from a directory.
+2.  **Transform (OCR):** Uses an ONNX model to perform Optical Character Recognition (OCR) and extract the LaTeX string.
+3.  **Load (Render):** Uses Matplotlib (with a LaTeX engine) to render the string back into a clean image.
 
-## 🗺️ The Pipeline (DAG)
+---
 
-The DAG (`dag_id: equation_ocr_to_latex`) is composed of the following tasks:
+## 🚀 Quickstart Guide
 
-1.  **Trigger (Manual):** The pipeline is started manually by providing the path to an input image (e.g., `{"image_path": "/path/to/my/equation.png"}`).
-2.  `transform_image`: Takes the original image, applies transformations (filters, resizing), and saves it to a "transformed" folder.
-3.  `run_ocr_model`: Loads an ONNX model (based on the Kaggle demo) and extracts the LaTeX *string* from the transformed image.
-4.  `render_latex`: Takes the LaTeX *string* and uses `matplotlib` to render it into a new image (the "evaluated equation").
-5.  `wait_for_feedback_file`: **The pipeline pauses here.** This task is a `FileSensor` that monitors a directory (`feedback/`) waiting for a file (`feedback_data.json`).
-6.  `save_feedback`: Once the feedback file is detected, this task reads it, processes the information (e.g., saves it to a database), and the pipeline completes successfully.
+Follow these steps to build and run the entire pipeline on your local machine.
 
-## ⚙️ Setup
+### Prerequisites
 
-### 1. Prerequisites
-* Python 3.8+ (with a `venv` virtual environment)
-* Apache Airflow (recommend `pip install apache-airflow`)
-* An OCR model in `.onnx` format (downloaded from the Kaggle notebook).
+* **Git:** [https://git-scm.com/](https://git-scm.com/)
+* **Docker Desktop:** [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
+    * *After installing, you **must** start Docker Desktop before proceeding.*
 
-### 2. Python Dependencies
-Install the necessary libraries found in the DAG:
+---
+
+### 1. Clone the Repository
+
+Clone the project to your local machine:
 
 ```bash
-# Main framework and sensors
-pip install "apache-airflow[sensors]"
-pip install pendulum
-
-# Pipeline libraries
-pip install pillow       # Or opencv-python, for transformation
-pip install onnxruntime  # For the OCR model
-pip install matplotlib   # For rendering LaTeX
+git clone [https://github.com/oscrack01/equation_ocr_to_latex.git](https://github.com/oscrack01/equation_ocr_to_latex.git)
+cd equation_ocr_to_latex
 ```
 
-### 3. Environment Configuration
-This DAG relies on the local filesystem to pass data between tasks.
+### 2. Manual Setup: Download Models
+This repository does not include the ML model files (they are too large for GitHub). You must download them manually.
 
-A. Create Directories: Ensure you create the folder structure defined in the DAG. The user running Airflow (worker) must have read/write permissions for them.
+1. **Create the models folder**:
 
 ```bash
 
-# Base path (adjust in the .py if necessary)
-BASE_DIR="/tmp/equation_project"
+# On Windows (PowerShell)
+mkdir -p src/equation_ocr/models
 
-mkdir -p $BASE_DIR
-mkdir -p $BASE_DIR/transformed
-mkdir -p $BASE_DIR/rendered
-mkdir -p $BASE_DIR/feedback
+# On macOS / Linux
+mkdir -p src/equation_ocr/models
 ```
+2. **Download the Model & Vocab**: Download the following two files and place them inside the src/equation_ocr/models/ folder you just created:
 
-B. Place Your Model: Save your .onnx file in an accessible location (e.g., a /models folder in your project) and ensure the path is correctly defined inside the run_ocr_model task.
+- Model File:
 
-### 4. Starting Airflow
-For local development, the easiest way is to use airflow standalone:
+    - Download: https://models.arz.ai/ocr_v2.onnx
+
+    - Save As: model.onnx
+
+- Vocabulary File:
+
+    - Download: https://models.arz.ai/ocr_v2.json
+
+    - Save As: keys.json (Note: Do not compress this file)
+
+3. **Prepare Input/Output Folders**
+Create the local folders that Airflow will use to read your images and write the results.
 
 ```bash
 
-# Initialize the Airflow database (only the first time)
-airflow db init
-
-# Create an admin user
-airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.org
-
-# Start the web server and scheduler
-airflow standalone
-
+mkdir my-inputs
+mkdir outputs
 ```
-Access the interface at http://localhost:8080.
+Now, place any equation image (e.g., test_equation.jpg) inside the ./my-inputs folder.
 
-🚀 How to Use the Pipeline
-1. Start Airflow and navigate to http://localhost:8080.
+4. **Build and Launch Airflow**
+This single command builds your custom Docker image, downloads Postgres and Redis, and launches the entire Airflow suite.
 
-2. Enable the DAG: Find equation_ocr_to_latex in the list and toggle the switch on.
-
-3. Trigger the Pipeline:
-
-    * Click on the DAG and press the "Play" (Trigger DAG ▶️) button.
-
-    * Select "Trigger DAG w/ config".
-
-    * In the JSON dialog box, provide the path to your input image:
-
-        ```json
-
-        {
-        "image_path": "/full/path/to/your/original_equation.png"
-        }
-        ```
-4. Human Review (Pause):
-
-* The pipeline will run tasks 1-4, and then the wait_for_feedback_file task will enter a "running" (or "up_for_retry") state. This is expected.
-
-* Go to the output folder: BASE_DIR/rendered/ (e.g., /tmp/equation_project/rendered/).
-
-* Check the final_equation.png file to see if the model was correct.
-
-5. Provide Feedback:
-
-* For the pipeline to continue, you must create the file the sensor is waiting for.
-
-* Open a terminal and create the feedback_data.json file with your evaluation:
+    Note: The first build will take several minutes (10-20 min) as it downloads and installs the LaTeX system.
 
 ```bash
-
-# Example of "correct" feedback
-echo '{"is_correct": true, "notes": "Looks perfect"}' > /tmp/equation_project/feedback/feedback_data.json
-
-# Example of "incorrect" feedback
-echo '{"is_correct": false, "correct_latex": "$\frac{1}{x^2}$"}' > /tmp/equation_project/feedback/feedback_data.json
+docker-compose up -d --build
 ```
 
-6. Completion:
+5. **Run Your Pipeline!**
+Wait about 60 seconds for all services to start.
 
-* Within 30 seconds (the poke_interval), the FileSensor will detect the file.
+Open your web browser and go to: http://localhost:8080
 
-* The wait_for_feedback_file task will be marked as "success".
+Log in with:
 
-* The final save_feedback task will execute, read your JSON, and the pipeline will complete.
+**Username**: airflow
+
+**Password**: airflow
+
+You will see the handwritten_equation_to_latex DAG.
+
+Click the toggle switch on the left to turn it On.
+
+Click the Play button (▶️) on the right and select "Trigger DAG".
+
+6. **Check Your Results**
+After a few moments, the pipeline will finish (the task squares will turn green).
+
+Go to the ./outputs folder in your project. You will find your rendered image (e.g., rendered_dag.png) inside!
