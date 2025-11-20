@@ -1,92 +1,156 @@
-# en dags/dag_equation_ocr_to_latex.py
 import pendulum
 import numpy as np
-import cv2  # <--- Necesitamos importar cv2 aquí
+import cv2
 import os
+import glob # <--- Importante: para buscar archivos
+from typing import Dict, List # <--- Para mejor type-hinting
+import logging
 from airflow.decorators import dag, task
 
-# Importa tus funciones
+# Importa tus funciones del paquete
 from equation_ocr.processing.image_utils import load_image
 from equation_ocr.ocr.recognition import get_latex_string_from_image
 from equation_ocr.latex.renderer import render_latex_to_image
 
 # Rutas de E/S dentro del contenedor
-INPUT_IMAGE_PATH = "/opt/airflow/inputs/test_equation.jpg"
-TEMP_IMAGE_PATH = "/opt/airflow/outputs/temp_image.png" # Archivo intermedio
-FINAL_IMAGE_PATH = "/opt/airflow/outputs/rendered_dag.png"
+INPUT_DIR = "/opt/airflow/inputs"
+OUTPUT_DIR = "/opt/airflow/outputs"
 
 @dag(
     dag_id="handwritten_equation_to_latex",
     schedule=None,
     start_date=pendulum.today('UTC').add(days=-1),
     catchup=False,
-    tags=["ocr", "latex", "mlops"],
+    tags=["ocr", "latex", "mlops", "dynamic"],
 )
-def equation_pipeline():
+def dynamic_equation_pipeline():
     """
-    Pipeline para transformar una imagen de ecuación.
-    Usa un archivo intermedio para pasar datos de imagen entre tareas.
+    Pipeline dinámico para procesar TODAS las imágenes de la carpeta de entrada.
+
+    1. Escanea la carpeta /opt/airflow/inputs.
+    2. Para CADA imagen, ejecuta un pipeline de 3 pasos:
+       - Guarda la imagen cargada (ej. 'img1_loaded_image.png')
+       - Guarda el texto LaTeX (ej. 'img1_latex.txt')
+       - Guarda la imagen renderizada (ej. 'img1_rendered.png')
     """
 
     @task
-    def extract_and_save(input_path: str, output_path: str) -> str:
+    def scan_input_directory(input_dir: str) -> List[str]:
         """
-        Tarea 1: Carga la imagen de entrada, la guarda en una ruta
-        temporal y devuelve esa ruta.
+        Tarea 1: Escanea la carpeta de entrada y devuelve una lista
+        de rutas a todas las imágenes .jpg y .png.
         """
-        print(f"Cargando imagen desde: {input_path}")
+        print(f"Escaneando directorio: {input_dir}")
+        # Busca todos los tipos de imagen comunes
+        search_paths = [
+            os.path.join(input_dir, "*.jpg"),
+            os.path.join(input_dir, "*.jpeg"),
+            os.path.join(input_dir, "*.png")
+        ]
+        
+        image_paths = []
+        for path in search_paths:
+            image_paths.extend(glob.glob(path))
+            
+        if not image_paths:
+            raise ValueError(f"No se encontraron imágenes en {input_dir}")
+            
+        print(f"Se encontraron {len(image_paths)} imágenes: {image_paths}")
+        return image_paths
+
+    @task
+    def process_one_image(input_path: str) -> Dict[str, str]:
+        """
+        Tarea 2: Carga UNA imagen, ejecuta el OCR y guarda los
+        archivos de salida solicitados (temp y txt).
+        
+        Devuelve un diccionario con el string de LaTeX y el nombre base
+        para la siguiente tarea.
+        """
+        print(f"Procesando: {input_path}")
+        
+        # 1. Genera los nombres de archivo dinámicos
+        # ej. 'image1.jpg' -> 'image1'
+        base_name = os.path.splitext(os.path.basename(input_path))[0]
+        
+        # 2. Carga la imagen
         image_array = load_image(input_path)
-        
-        # Asegura que el directorio de salida exista
-        output_dir = os.path.dirname(output_path)
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Guarda la imagen en la ruta temporal
-        print(f"Guardando imagen temporal en: {output_path}")
-        cv2.imwrite(output_path, image_array)
-        
-        # Devuelve la ruta (un string), que JSON sí puede manejar
-        return output_path
 
-    @task
-    def ocr_to_latex(temp_image_path: str) -> str:
-        """
-        Tarea 2: Recibe la RUTA de la imagen temporal, la carga,
-        ejecuta el OCR y devuelve el string de LaTeX.
-        """
-        print(f"Cargando imagen temporal desde: {temp_image_path}")
-        # Carga la imagen desde la ruta que nos pasó la Tarea 1
-        image_array = load_image(temp_image_path)
+        # 3. [Requisito]: Guarda la imagen cargada (temp)
+        temp_path = os.path.join(OUTPUT_DIR, f"{base_name}_loaded_image.png")
+        cv2.imwrite(temp_path, image_array)
+        print(f"Imagen temporal guardada en: {temp_path}")
         
-        print("Ejecutando OCR sobre la imagen...")
+        # 4. Ejecuta el OCR
         latex_str = get_latex_string_from_image(image_array)
-        
         if not latex_str:
-            raise ValueError("El OCR no pudo extraer texto.")
+            raise ValueError(f"El OCR no pudo extraer texto de {input_path}")
         
-        return latex_str
+        # 5. [Requisito]: Guarda el archivo .txt
+        text_path = os.path.join(OUTPUT_DIR, f"{base_name}_latex.txt")
+        with open(text_path, 'w', encoding='utf-8') as f:
+            f.write(latex_str)
+        print(f"Archivo LaTeX TXT guardado en: {text_path}")
+
+        # 6. Pasa el string de LaTeX y el nombre base a la siguiente tarea
+        return {
+            "latex_string": latex_str,
+            "base_name": base_name
+        }
 
     @task
-    def latex_to_render(latex_string: str, final_output_path: str) -> str:
+    def render_final_image(ocr_data: Dict[str, str]) -> str:
         """
-        Tarea 3: Recibe el string de LaTeX y lo renderiza
-        en la ruta de salida final.
+        Tarea 3: Toma el string de LaTeX y el nombre base
+        y renderiza la imagen final.
+        Si el LaTeX es inválido, loguea el error pero NO falla la tarea.
         """
-        print(f"Renderizando LaTeX en: {final_output_path}")
-        success = render_latex_to_image(latex_string, final_output_path)
-        if not success:
-            raise RuntimeError(f"Fallo el renderizado de LaTeX para: {latex_string}")
-        return final_output_path
+        latex_str = ocr_data["latex_string"]
+        base_name = ocr_data["base_name"]
 
-    # --- Definición del flujo ---
-    # 1. Tarea 1 toma la entrada y guarda un archivo temporal
-    temp_path = extract_and_save(INPUT_IMAGE_PATH, TEMP_IMAGE_PATH)
+        final_path = os.path.join(OUTPUT_DIR, f"{base_name}_rendered.png")
+
+        print(f"Renderizando imagen final en: {final_path}")
+
+        # --- ¡CAMBIO CLAVE AQUÍ! ---
+        # Usamos try...except para capturar el ParseSyntaxException
+
+        try:
+            # Intentamos renderizar la imagen
+            success = render_latex_to_image(latex_str, final_path)
+
+            if not success:
+                # Esto es por si la función maneja el error internamente
+                logging.warning(f"La función de renderizado devolvió False para: {base_name}")
+                return f"Renderizado fallido (devuelto False) para {base_name}"
+
+        except Exception as e:
+            # ¡Aquí capturamos el error! (Ej. ParseSyntaxException)
+            logging.error(f"FALLO EL RENDERIZADO DE {base_name} DEBIDO A SINTAXIS INVÁLIDA.")
+            logging.error(f"Error: {e}")
+            logging.error(f"String de LaTeX que falló: {latex_str}")
+
+            # NO HACEMOS 'raise RuntimeError'.
+            # Simplemente devolvemos un string diciendo que falló.
+            # Como no lanzamos una excepción, Airflow marcará la tarea como 'SUCCESS'.
+            return f"Renderizado fallido (Excepción capturada) para {base_name}"
+
+        # Si try/except pasa sin problemas, devuelve la ruta exitosa
+        return final_path
+
+    # --- Definición del Flujo Dinámico ---
     
-    # 2. Tarea 2 usa la ruta del archivo temporal
-    latex_result = ocr_to_latex(temp_path)
+    # 1. Ejecuta la Tarea 1 UNA VEZ para obtener la lista de archivos
+    image_paths_list = scan_input_directory(INPUT_DIR)
     
-    # 3. Tarea 3 usa el string de LaTeX
-    latex_to_render(latex_result, FINAL_IMAGE_PATH)
+    # 2. Llama a .expand() para ejecutar la Tarea 2 MÚLTIPLES VECES,
+    #    una por cada 'input_path' en la lista.
+    ocr_results = process_one_image.expand(input_path=image_paths_list)
+    
+    # 3. Llama a .expand() de nuevo para la Tarea 3,
+    #    una por cada resultado de la Tarea 2.
+    render_final_image.expand(ocr_data=ocr_results)
+
 
 # Instancia el DAG
-equation_pipeline()
+dynamic_equation_pipeline()
